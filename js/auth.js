@@ -1,12 +1,4 @@
-// 等待Supabase可用的函数
-function getSupabase() {
-    if (typeof window.supabase === 'undefined') {
-        throw new Error('Supabase未初始化，请刷新页面重试');
-    }
-    return window.supabase;
-}
-
-// 认证功能
+// 简化的认证管理器
 class AuthManager {
     constructor() {
         this.currentUser = null;
@@ -15,34 +7,45 @@ class AuthManager {
 
     async init() {
         try {
-            // 获取supabase实例
-            const supabase = getSupabase();
+            // 等待Supabase就绪
+            await this.waitForSupabase();
             
-            // 检查当前登录状态
-            const { data: { session } } = await supabase.auth.getSession();
+            const { data: { session } } = await window.supabase.auth.getSession();
             this.currentUser = session?.user || null;
             this.updateUI();
             
-            // 监听认证状态变化
-            supabase.auth.onAuthStateChange((event, session) => {
+            window.supabase.auth.onAuthStateChange((event, session) => {
                 this.currentUser = session?.user || null;
                 this.updateUI();
                 
                 if (event === 'SIGNED_IN') {
                     this.closeAuthModal();
-                    window.location.reload();
+                    setTimeout(() => window.location.reload(), 1000);
                 }
             });
         } catch (error) {
             console.error('AuthManager初始化失败:', error);
-            // 显示错误信息给用户
-            this.showGlobalError('系统初始化失败，请刷新页面');
         }
     }
 
+    // 等待Supabase就绪
+    waitForSupabase() {
+        return new Promise((resolve) => {
+            const check = () => {
+                if (window.supabase && window.supabase.auth) {
+                    resolve();
+                } else {
+                    setTimeout(check, 100);
+                }
+            };
+            check();
+        });
+    }
+
     async login(email, password) {
-        const supabase = getSupabase();
-        const { data, error } = await supabase.auth.signInWithPassword({
+        await this.waitForSupabase();
+        
+        const { data, error } = await window.supabase.auth.signInWithPassword({
             email,
             password
         });
@@ -52,8 +55,9 @@ class AuthManager {
     }
 
     async signup(email, password, username) {
-        const supabase = getSupabase();
-        const { data, error } = await supabase.auth.signUp({
+        await this.waitForSupabase();
+        
+        const { data, error } = await window.supabase.auth.signUp({
             email,
             password,
             options: {
@@ -64,44 +68,25 @@ class AuthManager {
         });
 
         if (error) throw new Error(error.message);
+        
+        if (data.user) {
+            this.showAuthSuccess('注册成功！请检查您的邮箱确认账户。');
+        }
+        
         return data;
     }
 
     async logout() {
-        const supabase = getSupabase();
-        const { error } = await supabase.auth.signOut();
+        await this.waitForSupabase();
+        
+        const { error } = await window.supabase.auth.signOut();
         if (error) {
             console.error('退出登录错误:', error);
         }
         window.location.reload();
     }
 
-    showGlobalError(message) {
-        // 在页面顶部显示错误消息
-        const errorDiv = document.createElement('div');
-        errorDiv.style.cssText = `
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            background: #ef4444;
-            color: white;
-            padding: 1rem;
-            text-align: center;
-            z-index: 10000;
-            font-family: Arial, sans-serif;
-        `;
-        errorDiv.textContent = message;
-        document.body.appendChild(errorDiv);
-        
-        setTimeout(() => {
-            errorDiv.remove();
-        }, 5000);
-    }
-
-    // 其他方法保持不变...
     updateUI() {
-        const authSection = document.getElementById('auth-section');
         const loginBtn = document.getElementById('login-btn');
         const signupBtn = document.getElementById('signup-btn');
         const userMenu = document.getElementById('user-menu');
@@ -174,39 +159,46 @@ class AuthManager {
             errorDiv.classList.remove('hidden');
         }
     }
+
+    showAuthSuccess(message) {
+        const errorDiv = document.getElementById('auth-error');
+        if (errorDiv) {
+            errorDiv.textContent = message;
+            errorDiv.style.color = 'green';
+            errorDiv.classList.remove('hidden');
+        }
+    }
 }
 
 // 初始化认证管理器
-const authManager = new AuthManager();
-
-// 事件监听器
 document.addEventListener('DOMContentLoaded', function() {
-    // 登录按钮
+    window.authManager = new AuthManager();
+    
+    // 设置事件监听器
     const loginBtn = document.getElementById('login-btn');
+    const signupBtn = document.getElementById('signup-btn');
+    const logoutBtn = document.getElementById('logout-btn');
+    const loginForm = document.getElementById('login-form');
+    const signupForm = document.getElementById('signup-form');
+
     if (loginBtn) {
         loginBtn.addEventListener('click', () => {
-            authManager.openAuthModal('login');
+            window.authManager.openAuthModal('login');
         });
     }
 
-    // 注册按钮
-    const signupBtn = document.getElementById('signup-btn');
     if (signupBtn) {
         signupBtn.addEventListener('click', () => {
-            authManager.openAuthModal('signup');
+            window.authManager.openAuthModal('signup');
         });
     }
 
-    // 退出按钮
-    const logoutBtn = document.getElementById('logout-btn');
     if (logoutBtn) {
         logoutBtn.addEventListener('click', () => {
-            authManager.logout();
+            window.authManager.logout();
         });
     }
 
-    // 登录表单
-    const loginForm = document.getElementById('login-form');
     if (loginForm) {
         loginForm.addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -214,15 +206,14 @@ document.addEventListener('DOMContentLoaded', function() {
             const password = document.getElementById('login-password').value;
 
             try {
-                await authManager.login(email, password);
+                await window.authManager.login(email, password);
+                window.authManager.showAuthSuccess('登录成功！');
             } catch (error) {
-                authManager.showAuthError(error.message);
+                window.authManager.showAuthError(error.message);
             }
         });
     }
 
-    // 注册表单
-    const signupForm = document.getElementById('signup-form');
     if (signupForm) {
         signupForm.addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -231,10 +222,9 @@ document.addEventListener('DOMContentLoaded', function() {
             const username = document.getElementById('signup-username').value;
 
             try {
-                await authManager.signup(email, password, username);
-                authManager.showAuthError('注册成功！请检查您的邮箱确认账户。');
+                await window.authManager.signup(email, password, username);
             } catch (error) {
-                authManager.showAuthError(error.message);
+                window.authManager.showAuthError(error.message);
             }
         });
     }
@@ -243,12 +233,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const closeButtons = document.querySelectorAll('.close');
     closeButtons.forEach(button => {
         button.addEventListener('click', () => {
-            authManager.closeAuthModal();
-            
-            const editModal = document.getElementById('edit-profile-modal');
-            if (editModal) {
-                editModal.classList.add('hidden');
-            }
+            window.authManager.closeAuthModal();
         });
     });
 
@@ -257,12 +242,7 @@ document.addEventListener('DOMContentLoaded', function() {
     modals.forEach(modal => {
         modal.addEventListener('click', (e) => {
             if (e.target === modal) {
-                authManager.closeAuthModal();
-                
-                const editModal = document.getElementById('edit-profile-modal');
-                if (editModal && e.target === editModal) {
-                    editModal.classList.add('hidden');
-                }
+                window.authManager.closeAuthModal();
             }
         });
     });
@@ -272,7 +252,7 @@ document.addEventListener('DOMContentLoaded', function() {
     tabButtons.forEach(button => {
         button.addEventListener('click', () => {
             const tab = button.getAttribute('data-tab');
-            authManager.switchAuthTab(tab);
+            window.authManager.switchAuthTab(tab);
         });
     });
 });

@@ -5,22 +5,22 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>书签社区 - 发现精彩内容</title>
     <link rel="stylesheet" href="css/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     
-    <!-- 直接初始化Supabase -->
+    <!-- 只在这里加载一次Supabase库并初始化 -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script>
-        // 直接在这里初始化Supabase（替换为你的实际信息）
-        document.addEventListener('DOMContentLoaded', function() {
-            const SUPABASE_URL = 'https://wxoqyzdfkkmodigszrcy.supabase.co';
-            const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind4b3F5emRma2ttb2RpZ3N6cmN5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI5MzMwMDksImV4cCI6MjA3ODUwOTAwOX0.9BeyxJVxKsmJ18Uc_jyKTIwelXWvqYE4j1TZOC8zyNk';
-            
-            if (typeof supabase !== 'undefined') {
-                window.supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-                console.log('Supabase初始化成功');
-            } else {
-                console.error('Supabase库加载失败');
-            }
-        });
+        // 直接初始化Supabase
+        const SUPABASE_URL = 'https://wxoqyzdfkkmodigszrcy.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind4b3F5emRma2ttb2RpZ3N6cmN5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI5MzMwMDksImV4cCI6MjA3ODUwOTAwOX0.9BeyxJVxKsmJ18Uc_jyKTIwelXWvqYE4j1TZOC8zyNk';
+        
+        // 立即初始化，不等待DOMContentLoaded
+        if (typeof supabase !== 'undefined') {
+            window.supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+            console.log('Supabase初始化成功');
+        } else {
+            console.error('Supabase库未加载');
+        }
     </script>
 </head>
 <body>
@@ -98,9 +98,7 @@
         </div>
     </div>
 
-    <!-- 在文件末尾，</body>标签之前检查 -->
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="js/supabase-client.js"></script>
+    <!-- 只加载应用脚本，不再重复加载Supabase -->
     <script src="js/auth.js"></script>
     <script src="js/bookmarks.js"></script>
     <script src="js/app.js"></script>
