@@ -219,7 +219,7 @@ function loadProfilePage() {
             return;
         }
         
-        console.log('用户已登录，加载个人资料');
+        console.log('用户已登录，加载个人资料:', user.id);
         // 加载用户资料
         loadUserProfile(user.id);
         
@@ -230,10 +230,11 @@ function loadProfilePage() {
             console.error('书签管理器未初始化');
         }
         
-        // 设置编辑资料功能
+        // 设置编辑资料功能 - 确保只设置一次
         setupEditProfile(user.id);
     }).catch(error => {
         console.error('检查用户登录状态错误:', error);
+        window.location.href = 'index.html';
     });
 }
 

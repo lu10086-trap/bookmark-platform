@@ -12,7 +12,7 @@ class BookmarkManager {
         this.currentCategory = 'all';
         this.searchTerm = '';
         this.bookmarks = [];
-        this.isSubmitting = false; // 添加防重复提交标志
+        this.isSubmitting = false;
     }
 
     // 等待Supabase就绪
@@ -94,8 +94,8 @@ class BookmarkManager {
 
             if (error) throw error;
 
-            // 提取书签数据
-            return data ? data.map(item => item.bookmarks) : [];
+            // 提取书签数据并过滤掉null值
+            return data ? data.map(item => item.bookmarks).filter(bookmark => bookmark !== null) : [];
         } catch (error) {
             console.error('获取收藏错误:', error);
             return [];
@@ -104,7 +104,6 @@ class BookmarkManager {
 
     // 添加书签
     async addBookmark(bookmarkData) {
-        // 防重复提交检查
         if (this.isSubmitting) {
             throw new Error('请勿重复提交，正在处理中...');
         }
@@ -139,7 +138,6 @@ class BookmarkManager {
             console.error('添加书签错误:', error);
             throw error;
         } finally {
-            // 无论成功失败，都重置提交状态
             this.isSubmitting = false;
         }
     }
@@ -233,6 +231,14 @@ class BookmarkManager {
         const isFavorited = bookmark.favorites && bookmark.favorites.length > 0;
         const tags = bookmark.tags ? bookmark.tags.join(', ') : '';
         
+        // 安全处理URL
+        let urlHostname = '';
+        try {
+            urlHostname = new URL(bookmark.url).hostname;
+        } catch (e) {
+            urlHostname = '无效URL';
+        }
+        
         return `
             <div class="bookmark-card" data-id="${bookmark.id}">
                 <div class="bookmark-header">
@@ -242,7 +248,7 @@ class BookmarkManager {
                                 ${bookmark.title}
                             </a>
                         </h3>
-                        <div class="bookmark-url">${new URL(bookmark.url).hostname}</div>
+                        <div class="bookmark-url">${urlHostname}</div>
                     </div>
                     ${options.showActions !== false ? `
                         <button class="favorite-btn ${isFavorited ? 'favorited' : ''}" 
@@ -261,7 +267,7 @@ class BookmarkManager {
                         ${bookmark.category ? `
                             <span class="bookmark-category">${bookmark.category}</span>
                         ` : ''}
-                        ${tags ? `• ${tags}` : ''}
+                        ${tags ? `<span class="bookmark-tags">• ${tags}</span>` : ''}
                     </div>
                     <div class="bookmark-actions">
                         <span>by ${bookmark.profiles?.username || '未知用户'}</span>
@@ -305,15 +311,26 @@ class BookmarkManager {
         }
     }
 
-    // 过滤书签
+    // 过滤书签 - 修复搜索和筛选逻辑
     filterBookmarks(bookmarks, category, searchTerm) {
+        console.log('过滤书签:', { category, searchTerm, bookmarksCount: bookmarks.length });
+        
         return bookmarks.filter(bookmark => {
+            // 分类筛选
             const matchesCategory = category === 'all' || bookmark.category === category;
-            const matchesSearch = !searchTerm || 
-                bookmark.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                bookmark.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                bookmark.tags?.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase()));
             
+            // 搜索筛选 - 修复搜索逻辑
+            let matchesSearch = true;
+            if (searchTerm && searchTerm.trim() !== '') {
+                const term = searchTerm.toLowerCase().trim();
+                matchesSearch = 
+                    (bookmark.title && bookmark.title.toLowerCase().includes(term)) ||
+                    (bookmark.description && bookmark.description.toLowerCase().includes(term)) ||
+                    (bookmark.tags && Array.isArray(bookmark.tags) && 
+                     bookmark.tags.some(tag => tag && tag.toLowerCase().includes(term)));
+            }
+            
+            console.log(`书签 "${bookmark.title}": 分类匹配=${matchesCategory}, 搜索匹配=${matchesSearch}`);
             return matchesCategory && matchesSearch;
         });
     }
@@ -323,26 +340,44 @@ class BookmarkManager {
         const container = document.getElementById('bookmarks-container');
         const loading = document.getElementById('loading');
         
+        if (!container) {
+            console.log('书签容器未找到，可能不在首页');
+            return;
+        }
+        
         if (loading) loading.classList.remove('hidden');
         
         try {
             const bookmarks = await this.getPublicBookmarks();
-            const filtered = this.filterBookmarks(bookmarks, this.currentCategory, this.searchTerm);
+            console.log('获取到的书签数量:', bookmarks.length);
             
-            if (container) {
-                if (filtered.length === 0) {
-                    container.innerHTML = '<p class="no-results">没有找到书签</p>';
-                } else {
-                    container.innerHTML = filtered.map(bookmark => 
-                        this.renderBookmarkCard(bookmark)
-                    ).join('');
-                }
+            const filtered = this.filterBookmarks(bookmarks, this.currentCategory, this.searchTerm);
+            console.log('过滤后的书签数量:', filtered.length);
+            
+            if (filtered.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <h3>没有找到书签</h3>
+                        <p>${this.searchTerm || this.currentCategory !== 'all' ? '尝试调整搜索条件或分类筛选' : '成为第一个添加书签的人吧！'}</p>
+                        <a href="add-bookmark.html" class="btn btn-primary">添加书签</a>
+                    </div>
+                `;
+            } else {
+                container.innerHTML = filtered.map(bookmark => 
+                    this.renderBookmarkCard(bookmark)
+                ).join('');
             }
         } catch (error) {
             console.error('加载书签错误:', error);
-            if (container) {
-                container.innerHTML = '<p class="error">加载书签时出错</p>';
-            }
+            container.innerHTML = `
+                <div class="error-state">
+                    <h3>加载失败</h3>
+                    <p>${error.message}</p>
+                    <button onclick="window.bookmarkManager.loadPublicBookmarks()" class="btn btn-outline">
+                        重新加载
+                    </button>
+                </div>
+            `;
         } finally {
             if (loading) loading.classList.add('hidden');
         }
@@ -355,35 +390,62 @@ class BookmarkManager {
             const supabase = getSupabase();
             
             const { data: { user } } = await supabase.auth.getUser();
-            if (!user) return;
+            if (!user) {
+                console.log('用户未登录，无法加载用户内容');
+                return;
+            }
 
             const myBookmarksContainer = document.getElementById('my-bookmarks-container');
             const myFavoritesContainer = document.getElementById('my-favorites-container');
 
+            console.log('加载用户内容，容器状态:', {
+                bookmarksContainer: !!myBookmarksContainer,
+                favoritesContainer: !!myFavoritesContainer
+            });
+
             // 加载用户的书签
             if (myBookmarksContainer) {
                 const userBookmarks = await this.getUserBookmarks(user.id);
-                myBookmarksContainer.innerHTML = userBookmarks.length === 0 ? 
-                    '<p class="no-results">您还没有添加任何书签</p>' :
-                    userBookmarks.map(bookmark => 
-                        this.renderBookmarkCard(bookmark, { showDelete: true })
+                console.log('用户书签数量:', userBookmarks.length);
+                
+                if (userBookmarks.length === 0) {
+                    myBookmarksContainer.innerHTML = '<div class="empty-state"><h3>暂无书签</h3><p>您还没有添加任何书签</p><a href="add-bookmark.html" class="btn btn-primary">添加书签</a></div>';
+                } else {
+                    myBookmarksContainer.innerHTML = userBookmarks.map(bookmark => 
+                        this.renderBookmarkCard(bookmark, { showDelete: true, showActions: false })
                     ).join('');
+                }
             }
 
             // 加载用户的收藏
             if (myFavoritesContainer) {
                 const userFavorites = await this.getUserFavorites(user.id);
-                myFavoritesContainer.innerHTML = userFavorites.length === 0 ? 
-                    '<p class="no-results">您还没有收藏任何书签</p>' :
-                    userFavorites.map(bookmark => 
-                        this.renderBookmarkCard(bookmark)
+                console.log('用户收藏数量:', userFavorites.length);
+                
+                if (userFavorites.length === 0) {
+                    myFavoritesContainer.innerHTML = '<div class="empty-state"><h3>暂无收藏</h3><p>您还没有收藏任何书签</p></div>';
+                } else {
+                    myFavoritesContainer.innerHTML = userFavorites.map(bookmark => 
+                        this.renderBookmarkCard(bookmark, { showActions: false })
                     ).join('');
+                }
             }
 
             // 更新统计信息
             this.updateProfileStats(user.id);
         } catch (error) {
             console.error('加载用户内容错误:', error);
+            
+            // 显示错误信息
+            const myBookmarksContainer = document.getElementById('my-bookmarks-container');
+            const myFavoritesContainer = document.getElementById('my-favorites-container');
+            
+            if (myBookmarksContainer) {
+                myBookmarksContainer.innerHTML = '<div class="error-state"><h3>加载失败</h3><p>无法加载书签数据</p><button onclick="window.bookmarkManager.loadUserContent()" class="btn btn-outline">重新加载</button></div>';
+            }
+            if (myFavoritesContainer) {
+                myFavoritesContainer.innerHTML = '<div class="error-state"><h3>加载失败</h3><p>无法加载收藏数据</p><button onclick="window.bookmarkManager.loadUserContent()" class="btn btn-outline">重新加载</button></div>';
+            }
         }
     }
 
@@ -415,44 +477,119 @@ class BookmarkManager {
 // 初始化书签管理器
 window.bookmarkManager = new BookmarkManager();
 
-// 页面加载完成后初始化
-document.addEventListener('DOMContentLoaded', function() {
-    // 如果是首页，加载书签
-    if (window.location.pathname.endsWith('index.html') || window.location.pathname === '/') {
-        window.bookmarkManager.loadPublicBookmarks();
-    }
+// 设置搜索和筛选事件监听器
+function setupSearchAndFilters() {
+    console.log('设置搜索和筛选事件监听器...');
     
-    // 设置搜索和筛选事件
+    // 搜索功能 - 修复搜索逻辑
     const searchInput = document.getElementById('search-input');
     const searchBtn = document.getElementById('search-btn');
-    const filterButtons = document.querySelectorAll('.filter-btn');
     
     if (searchInput && searchBtn) {
+        console.log('找到搜索元素，设置事件监听器');
+        
         const performSearch = () => {
-            window.bookmarkManager.searchTerm = searchInput.value.trim();
-            window.bookmarkManager.loadPublicBookmarks();
+            const searchTerm = searchInput.value.trim();
+            console.log('执行搜索:', searchTerm);
+            
+            if (window.bookmarkManager) {
+                window.bookmarkManager.searchTerm = searchTerm;
+                window.bookmarkManager.loadPublicBookmarks();
+            } else {
+                console.error('书签管理器未初始化');
+            }
         };
         
-        searchBtn.addEventListener('click', performSearch);
-        searchInput.addEventListener('keypress', (e) => {
+        // 移除可能存在的旧监听器
+        searchBtn.replaceWith(searchBtn.cloneNode(true));
+        searchInput.replaceWith(searchInput.cloneNode(true));
+        
+        // 重新获取元素引用
+        const newSearchBtn = document.getElementById('search-btn');
+        const newSearchInput = document.getElementById('search-input');
+        
+        newSearchBtn.addEventListener('click', performSearch);
+        newSearchInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') {
                 performSearch();
             }
         });
+        
+        // 添加输入变化监听，实时搜索或清除搜索
+        newSearchInput.addEventListener('input', (e) => {
+            if (e.target.value === '' && window.bookmarkManager) {
+                window.bookmarkManager.searchTerm = '';
+                window.bookmarkManager.loadPublicBookmarks();
+            }
+        });
+        
+        console.log('搜索功能设置完成');
+    } else {
+        console.log('搜索元素未找到，当前页面可能不需要搜索功能');
     }
 
-    // 分类筛选
+    // 分类筛选功能 - 修复筛选逻辑
+    const filterButtons = document.querySelectorAll('.filter-btn');
+    
     if (filterButtons.length > 0) {
+        console.log('找到筛选按钮:', filterButtons.length);
+        
+        // 移除可能存在的旧监听器
         filterButtons.forEach(button => {
+            button.replaceWith(button.cloneNode(true));
+        });
+        
+        // 重新获取元素引用
+        const newFilterButtons = document.querySelectorAll('.filter-btn');
+        
+        newFilterButtons.forEach(button => {
             button.addEventListener('click', () => {
+                console.log('点击筛选按钮:', button.getAttribute('data-category'));
+                
                 // 更新活跃状态
-                filterButtons.forEach(btn => btn.classList.remove('active'));
+                newFilterButtons.forEach(btn => btn.classList.remove('active'));
                 button.classList.add('active');
                 
                 // 更新当前分类并重新加载
-                window.bookmarkManager.currentCategory = button.getAttribute('data-category');
-                window.bookmarkManager.loadPublicBookmarks();
+                const category = button.getAttribute('data-category');
+                if (window.bookmarkManager) {
+                    window.bookmarkManager.currentCategory = category;
+                    window.bookmarkManager.loadPublicBookmarks();
+                } else {
+                    console.error('书签管理器未初始化');
+                }
             });
         });
+        
+        console.log('分类筛选功能设置完成');
+    } else {
+        console.log('筛选按钮未找到，当前页面可能不需要筛选功能');
     }
+}
+
+// 页面加载完成后初始化
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('DOM加载完成，初始化书签管理器...');
+    
+    // 等待Supabase初始化完成
+    const waitForSupabase = () => {
+        if (window.supabase) {
+            // 如果是首页，加载书签并设置事件监听器
+            if (window.location.pathname.endsWith('index.html') || window.location.pathname === '/') {
+                console.log('在首页，初始化书签功能');
+                window.bookmarkManager.loadPublicBookmarks();
+                setupSearchAndFilters();
+            }
+            
+            // 如果是个人中心页面，加载用户内容
+            if (window.location.pathname.endsWith('profile.html')) {
+                console.log('在个人中心页面，加载用户内容');
+                window.bookmarkManager.loadUserContent();
+            }
+        } else {
+            setTimeout(waitForSupabase, 100);
+        }
+    };
+    
+    waitForSupabase();
 });
