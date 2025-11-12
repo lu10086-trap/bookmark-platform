@@ -5,17 +5,36 @@ function getSupabase() {
     }
     return window.supabase;
 }
+
 // 书签管理功能
 class BookmarkManager {
     constructor() {
         this.currentCategory = 'all';
         this.searchTerm = '';
         this.bookmarks = [];
+        this.isSubmitting = false; // 添加防重复提交标志
+    }
+
+    // 等待Supabase就绪
+    async waitForSupabase() {
+        return new Promise((resolve) => {
+            const check = () => {
+                if (window.supabase) {
+                    resolve();
+                } else {
+                    setTimeout(check, 100);
+                }
+            };
+            check();
+        });
     }
 
     // 获取公开书签
     async getPublicBookmarks() {
         try {
+            await this.waitForSupabase();
+            const supabase = getSupabase();
+            
             const { data, error } = await supabase
                 .from('bookmarks')
                 .select(`
@@ -39,6 +58,9 @@ class BookmarkManager {
     // 获取用户的书签
     async getUserBookmarks(userId) {
         try {
+            await this.waitForSupabase();
+            const supabase = getSupabase();
+            
             const { data, error } = await supabase
                 .from('bookmarks')
                 .select('*')
@@ -56,6 +78,9 @@ class BookmarkManager {
     // 获取用户的收藏
     async getUserFavorites(userId) {
         try {
+            await this.waitForSupabase();
+            const supabase = getSupabase();
+            
             const { data, error } = await supabase
                 .from('favorites')
                 .select(`
@@ -79,7 +104,17 @@ class BookmarkManager {
 
     // 添加书签
     async addBookmark(bookmarkData) {
+        // 防重复提交检查
+        if (this.isSubmitting) {
+            throw new Error('请勿重复提交，正在处理中...');
+        }
+        
+        this.isSubmitting = true;
+        
         try {
+            await this.waitForSupabase();
+            const supabase = getSupabase();
+            
             const { data: { user } } = await supabase.auth.getUser();
             if (!user) throw new Error('请先登录');
 
@@ -93,16 +128,28 @@ class BookmarkManager {
                 .single();
 
             if (error) throw error;
+            
+            // 成功添加后，重新加载书签列表
+            if (window.location.pathname.endsWith('index.html') || window.location.pathname === '/') {
+                this.loadPublicBookmarks();
+            }
+            
             return data;
         } catch (error) {
             console.error('添加书签错误:', error);
             throw error;
+        } finally {
+            // 无论成功失败，都重置提交状态
+            this.isSubmitting = false;
         }
     }
 
     // 更新书签
     async updateBookmark(bookmarkId, updates) {
         try {
+            await this.waitForSupabase();
+            const supabase = getSupabase();
+            
             const { data, error } = await supabase
                 .from('bookmarks')
                 .update(updates)
@@ -121,6 +168,9 @@ class BookmarkManager {
     // 删除书签
     async deleteBookmark(bookmarkId) {
         try {
+            await this.waitForSupabase();
+            const supabase = getSupabase();
+            
             const { error } = await supabase
                 .from('bookmarks')
                 .delete()
@@ -137,6 +187,9 @@ class BookmarkManager {
     // 添加/取消收藏
     async toggleFavorite(bookmarkId) {
         try {
+            await this.waitForSupabase();
+            const supabase = getSupabase();
+            
             const { data: { user } } = await supabase.auth.getUser();
             if (!user) throw new Error('请先登录');
 
@@ -193,7 +246,7 @@ class BookmarkManager {
                     </div>
                     ${options.showActions !== false ? `
                         <button class="favorite-btn ${isFavorited ? 'favorited' : ''}" 
-                                onclick="bookmarkManager.handleFavorite('${bookmark.id}')">
+                                onclick="window.bookmarkManager.handleFavorite('${bookmark.id}')">
                             ${isFavorited ? '❤️' : '🤍'}
                         </button>
                     ` : ''}
@@ -213,7 +266,7 @@ class BookmarkManager {
                     <div class="bookmark-actions">
                         <span>by ${bookmark.profiles?.username || '未知用户'}</span>
                         ${options.showDelete ? `
-                            <button onclick="bookmarkManager.handleDelete('${bookmark.id}')" 
+                            <button onclick="window.bookmarkManager.handleDelete('${bookmark.id}')" 
                                     class="btn btn-outline" style="margin-left: 0.5rem;">
                                 删除
                             </button>
@@ -297,34 +350,41 @@ class BookmarkManager {
 
     // 加载用户内容
     async loadUserContent() {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
+        try {
+            await this.waitForSupabase();
+            const supabase = getSupabase();
+            
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) return;
 
-        const myBookmarksContainer = document.getElementById('my-bookmarks-container');
-        const myFavoritesContainer = document.getElementById('my-favorites-container');
+            const myBookmarksContainer = document.getElementById('my-bookmarks-container');
+            const myFavoritesContainer = document.getElementById('my-favorites-container');
 
-        // 加载用户的书签
-        if (myBookmarksContainer) {
-            const userBookmarks = await this.getUserBookmarks(user.id);
-            myBookmarksContainer.innerHTML = userBookmarks.length === 0 ? 
-                '<p class="no-results">您还没有添加任何书签</p>' :
-                userBookmarks.map(bookmark => 
-                    this.renderBookmarkCard(bookmark, { showDelete: true })
-                ).join('');
+            // 加载用户的书签
+            if (myBookmarksContainer) {
+                const userBookmarks = await this.getUserBookmarks(user.id);
+                myBookmarksContainer.innerHTML = userBookmarks.length === 0 ? 
+                    '<p class="no-results">您还没有添加任何书签</p>' :
+                    userBookmarks.map(bookmark => 
+                        this.renderBookmarkCard(bookmark, { showDelete: true })
+                    ).join('');
+            }
+
+            // 加载用户的收藏
+            if (myFavoritesContainer) {
+                const userFavorites = await this.getUserFavorites(user.id);
+                myFavoritesContainer.innerHTML = userFavorites.length === 0 ? 
+                    '<p class="no-results">您还没有收藏任何书签</p>' :
+                    userFavorites.map(bookmark => 
+                        this.renderBookmarkCard(bookmark)
+                    ).join('');
+            }
+
+            // 更新统计信息
+            this.updateProfileStats(user.id);
+        } catch (error) {
+            console.error('加载用户内容错误:', error);
         }
-
-        // 加载用户的收藏
-        if (myFavoritesContainer) {
-            const userFavorites = await this.getUserFavorites(user.id);
-            myFavoritesContainer.innerHTML = userFavorites.length === 0 ? 
-                '<p class="no-results">您还没有收藏任何书签</p>' :
-                userFavorites.map(bookmark => 
-                    this.renderBookmarkCard(bookmark)
-                ).join('');
-        }
-
-        // 更新统计信息
-        this.updateProfileStats(user.id);
     }
 
     // 更新个人资料统计
@@ -333,20 +393,66 @@ class BookmarkManager {
         const favoritesCount = document.getElementById('favorites-count');
 
         if (bookmarksCount || favoritesCount) {
-            const [bookmarks, favorites] = await Promise.all([
-                this.getUserBookmarks(userId),
-                this.getUserFavorites(userId)
-            ]);
+            try {
+                const [bookmarks, favorites] = await Promise.all([
+                    this.getUserBookmarks(userId),
+                    this.getUserFavorites(userId)
+                ]);
 
-            if (bookmarksCount) {
-                bookmarksCount.textContent = `${bookmarks.length} 书签`;
-            }
-            if (favoritesCount) {
-                favoritesCount.textContent = `${favorites.length} 收藏`;
+                if (bookmarksCount) {
+                    bookmarksCount.textContent = `${bookmarks.length} 书签`;
+                }
+                if (favoritesCount) {
+                    favoritesCount.textContent = `${favorites.length} 收藏`;
+                }
+            } catch (error) {
+                console.error('更新统计信息错误:', error);
             }
         }
     }
 }
 
 // 初始化书签管理器
-const bookmarkManager = new BookmarkManager();
+window.bookmarkManager = new BookmarkManager();
+
+// 页面加载完成后初始化
+document.addEventListener('DOMContentLoaded', function() {
+    // 如果是首页，加载书签
+    if (window.location.pathname.endsWith('index.html') || window.location.pathname === '/') {
+        window.bookmarkManager.loadPublicBookmarks();
+    }
+    
+    // 设置搜索和筛选事件
+    const searchInput = document.getElementById('search-input');
+    const searchBtn = document.getElementById('search-btn');
+    const filterButtons = document.querySelectorAll('.filter-btn');
+    
+    if (searchInput && searchBtn) {
+        const performSearch = () => {
+            window.bookmarkManager.searchTerm = searchInput.value.trim();
+            window.bookmarkManager.loadPublicBookmarks();
+        };
+        
+        searchBtn.addEventListener('click', performSearch);
+        searchInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                performSearch();
+            }
+        });
+    }
+
+    // 分类筛选
+    if (filterButtons.length > 0) {
+        filterButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                // 更新活跃状态
+                filterButtons.forEach(btn => btn.classList.remove('active'));
+                button.classList.add('active');
+                
+                // 更新当前分类并重新加载
+                window.bookmarkManager.currentCategory = button.getAttribute('data-category');
+                window.bookmarkManager.loadPublicBookmarks();
+            });
+        });
+    }
+});
