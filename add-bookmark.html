@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>添加书签 - 书签社区</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="nav-logo">
+                <h1>📚 书签社区</h1>
+            </div>
+            <div class="nav-links">
+                <a href="index.html" class="nav-link">首页</a>
+                <a href="add-bookmark.html" class="nav-link active">添加书签</a>
+                <a href="profile.html" class="nav-link">个人中心</a>
+                <div id="auth-section">
+                    <!-- 认证部分与首页相同 -->
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <main class="container">
+        <div class="form-container">
+            <h1>添加新书签</h1>
+            <form id="add-bookmark-form" class="bookmark-form">
+                <div class="form-group">
+                    <label for="bookmark-title">标题 *</label>
+                    <input type="text" id="bookmark-title" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="bookmark-url">网址 *</label>
+                    <input type="url" id="bookmark-url" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="bookmark-description">描述</label>
+                    <textarea id="bookmark-description" rows="3"></textarea>
+                </div>
+                
+                <div class="form-group">
+                    <label for="bookmark-category">分类</label>
+                    <select id="bookmark-category">
+                        <option value="">选择分类</option>
+                        <option value="technology">技术</option>
+                        <option value="design">设计</option>
+                        <option value="education">教育</option>
+                        <option value="entertainment">娱乐</option>
+                        <option value="business">商业</option>
+                        <option value="news">新闻</option>
+                        <option value="other">其他</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="bookmark-tags">标签（用逗号分隔）</label>
+                    <input type="text" id="bookmark-tags" placeholder="JavaScript, 教程, 前端">
+                </div>
+                
+                <div class="form-group checkbox-group">
+                    <input type="checkbox" id="bookmark-public" checked>
+                    <label for="bookmark-public">公开此书签</label>
+                </div>
+                
+                <button type="submit" class="btn btn-primary btn-large">添加书签</button>
+            </form>
+        </div>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="js/supabase-client.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/bookmarks.js"></script>
+</body>
+</html>

@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>个人中心 - 书签社区</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="nav-logo">
+                <h1>📚 书签社区</h1>
+            </div>
+            <div class="nav-links">
+                <a href="index.html" class="nav-link">首页</a>
+                <a href="add-bookmark.html" class="nav-link">添加书签</a>
+                <a href="profile.html" class="nav-link active">个人中心</a>
+                <div id="auth-section">
+                    <!-- 认证部分与首页相同 -->
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <main class="container">
+        <div class="profile-container">
+            <div class="profile-header">
+                <div class="profile-avatar">
+                    <div class="avatar-placeholder" id="user-avatar">👤</div>
+                </div>
+                <div class="profile-info">
+                    <h1 id="profile-username">用户名</h1>
+                    <p id="profile-bio">这个人很懒，什么都没有写...</p>
+                    <p id="profile-stats">
+                        <span id="bookmarks-count">0 书签</span> • 
+                        <span id="favorites-count">0 收藏</span>
+                    </p>
+                </div>
+                <button id="edit-profile-btn" class="btn btn-outline">编辑资料</button>
+            </div>
+
+            <div class="profile-tabs">
+                <button class="profile-tab active" data-tab="my-bookmarks">我的书签</button>
+                <button class="profile-tab" data-tab="my-favorites">我的收藏</button>
+            </div>
+
+            <div class="tab-content">
+                <div id="my-bookmarks" class="tab-pane active">
+                    <div class="bookmarks-grid" id="my-bookmarks-container">
+                        <!-- 用户的书签将加载到这里 -->
+                    </div>
+                </div>
+                
+                <div id="my-favorites" class="tab-pane">
+                    <div class="bookmarks-grid" id="my-favorites-container">
+                        <!-- 用户的收藏将加载到这里 -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- 编辑资料模态框 -->
+    <div id="edit-profile-modal" class="modal hidden">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2>编辑资料</h2>
+            <form id="edit-profile-form" class="profile-form">
+                <div class="form-group">
+                    <label for="edit-username">用户名</label>
+                    <input type="text" id="edit-username" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="edit-bio">个人简介</label>
+                    <textarea id="edit-bio" rows="3"></textarea>
+                </div>
+                
+                <div class="form-group">
+                    <label for="edit-website">个人网站</label>
+                    <input type="url" id="edit-website">
+                </div>
+                
+                <button type="submit" class="btn btn-primary">保存更改</button>
+            </form>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="js/supabase-client.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/bookmarks.js"></script>
+    <script src="js/profile.js"></script>
+</body>
+</html>
