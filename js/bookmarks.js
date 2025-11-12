@@ -489,7 +489,7 @@ class BookmarkManager {
             return bookmarks;
         }
         
-        return bookmarks.filter(bookmark => {
+        const filtered = bookmarks.filter(bookmark => {
             // 分类筛选
             const matchesCategory = category === 'all' || bookmark.category === category;
             
@@ -502,13 +502,13 @@ class BookmarkManager {
                     (bookmark.description && bookmark.description.toLowerCase().includes(term)) ||
                     (bookmark.tags && Array.isArray(bookmark.tags) && 
                      bookmark.tags.some(tag => tag && tag.toLowerCase().includes(term)));
-                
-                console.log(`搜索 "${term}": 标题匹配=${bookmark.title && bookmark.title.toLowerCase().includes(term)}, 描述匹配=${bookmark.description && bookmark.description.toLowerCase().includes(term)}`);
             }
             
-            console.log(`书签 "${bookmark.title}": 分类匹配=${matchesCategory}, 搜索匹配=${matchesSearch}`);
             return matchesCategory && matchesSearch;
         });
+        
+        console.log(`过滤结果: 从 ${bookmarks.length} 个书签中筛选出 ${filtered.length} 个`);
+        return filtered;
     }
 
     // 加载公开书签
