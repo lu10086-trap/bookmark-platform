@@ -479,7 +479,7 @@ class BookmarkManager {
         });
     }
 
-    // 过滤书签 - 修复搜索和筛选逻辑
+    // 过滤书签 - 改进模糊搜索逻辑
     filterBookmarks(bookmarks, category, searchTerm) {
         console.log('过滤书签:', { category, searchTerm, bookmarksCount: bookmarks.length });
         
@@ -493,37 +493,89 @@ class BookmarkManager {
             // 分类筛选
             const matchesCategory = category === 'all' || bookmark.category === category;
             
-            // 搜索筛选 - 修复搜索逻辑
+            // 搜索筛选 - 改进模糊搜索逻辑
             let matchesSearch = true;
             if (searchTerm && searchTerm.trim() !== '') {
                 const term = searchTerm.toLowerCase().trim();
                 
-                // 检查标题匹配
-                const titleMatch = bookmark.title && bookmark.title.toLowerCase().includes(term);
+                // 关键词拆分（支持空格分隔的多个关键词）
+                const keywords = term.split(/\s+/).filter(keyword => keyword.length > 0);
                 
-                // 检查描述匹配
-                const descriptionMatch = bookmark.description && bookmark.description.toLowerCase().includes(term);
+                // 计算匹配度分数
+                let matchScore = 0;
+                let totalPossibleScore = 0;
                 
-                // 检查标签匹配
-                let tagsMatch = false;
-                if (bookmark.tags && Array.isArray(bookmark.tags)) {
-                    tagsMatch = bookmark.tags.some(tag => tag && tag.toLowerCase().includes(term));
+                keywords.forEach(keyword => {
+                    // 标题匹配（权重最高）
+                    if (bookmark.title && bookmark.title.toLowerCase().includes(keyword)) {
+                        matchScore += 3; // 标题匹配权重为3
+                    }
+                    
+                    // 描述匹配（权重中等）
+                    if (bookmark.description && bookmark.description.toLowerCase().includes(keyword)) {
+                        matchScore += 2; // 描述匹配权重为2
+                    }
+                    
+                    // 标签匹配（权重中等）
+                    if (bookmark.tags && Array.isArray(bookmark.tags)) {
+                        const tagMatch = bookmark.tags.some(tag => tag && tag.toLowerCase().includes(keyword));
+                        if (tagMatch) {
+                            matchScore += 2; // 标签匹配权重为2
+                        }
+                    }
+                    
+                    // 分类匹配（权重较低）
+                    if (bookmark.category && bookmark.category.toLowerCase().includes(keyword)) {
+                        matchScore += 1; // 分类匹配权重为1
+                    }
+                    
+                    totalPossibleScore += 3; // 每个关键词最大可能分数为3
+                });
+                
+                // 计算匹配度百分比
+                const matchPercentage = totalPossibleScore > 0 ? (matchScore / totalPossibleScore) * 100 : 0;
+                
+                // 设置匹配阈值（30%以上认为匹配）
+                matchesSearch = matchPercentage >= 30;
+                
+                console.log(`搜索 "${term}": 匹配度=${matchPercentage.toFixed(1)}%, 关键词数=${keywords.length}, 匹配分数=${matchScore}/${totalPossibleScore}`);
+                
+                // 如果匹配，记录详细信息
+                if (matchesSearch) {
+                    console.log(`书签 "${bookmark.title}" 匹配搜索条件，匹配度: ${matchPercentage.toFixed(1)}%`);
                 }
-                
-                matchesSearch = titleMatch || descriptionMatch || tagsMatch;
-                
-                console.log(`搜索 "${term}": 标题匹配=${titleMatch}, 描述匹配=${descriptionMatch}, 标签匹配=${tagsMatch}`);
             }
             
-            const result = matchesCategory && matchesSearch;
-            if (result && searchTerm) {
-                console.log(`书签 "${bookmark.title}" 匹配搜索条件`);
-            }
-            
-            return result;
+            return matchesCategory && matchesSearch;
         });
         
         console.log(`过滤结果: 从 ${bookmarks.length} 个书签中筛选出 ${filtered.length} 个`);
+        
+        // 如果有搜索词，按匹配度排序
+        if (searchTerm && searchTerm.trim() !== '') {
+            filtered.sort((a, b) => {
+                const term = searchTerm.toLowerCase().trim();
+                const keywords = term.split(/\s+/).filter(keyword => keyword.length > 0);
+                
+                const calculateScore = (bookmark) => {
+                    let score = 0;
+                    keywords.forEach(keyword => {
+                        if (bookmark.title && bookmark.title.toLowerCase().includes(keyword)) score += 3;
+                        if (bookmark.description && bookmark.description.toLowerCase().includes(keyword)) score += 2;
+                        if (bookmark.tags && Array.isArray(bookmark.tags)) {
+                            if (bookmark.tags.some(tag => tag && tag.toLowerCase().includes(keyword))) score += 2;
+                        }
+                        if (bookmark.category && bookmark.category.toLowerCase().includes(keyword)) score += 1;
+                    });
+                    return score;
+                };
+                
+                return calculateScore(b) - calculateScore(a);
+            });
+            
+            console.log('搜索结果已按匹配度排序');
+        }
+        
         return filtered;
     }
 
@@ -717,8 +769,19 @@ function setupSearchAndFilters() {
                 // 添加防抖，避免频繁搜索
                 clearTimeout(window.searchTimeout);
                 window.searchTimeout = setTimeout(() => {
+                    console.log('执行实时搜索:', searchTerm);
                     window.bookmarkManager.loadPublicBookmarks();
-                }, 300);
+                }, 500); // 增加防抖时间，提供更好的用户体验
+            }
+        });
+        
+        // 添加清除搜索功能
+        searchInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                searchInput.value = '';
+                window.bookmarkManager.searchTerm = '';
+                window.bookmarkManager.loadPublicBookmarks();
+                console.log('清除搜索');
             }
         });
         
