@@ -1,3 +1,10 @@
+// 等待Supabase可用的函数
+function getSupabase() {
+    if (typeof window.supabase === 'undefined') {
+        throw new Error('Supabase未初始化，请刷新页面重试');
+    }
+    return window.supabase;
+}
 // 书签管理功能
 class BookmarkManager {
     constructor() {
