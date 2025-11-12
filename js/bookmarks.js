@@ -497,14 +497,30 @@ class BookmarkManager {
             let matchesSearch = true;
             if (searchTerm && searchTerm.trim() !== '') {
                 const term = searchTerm.toLowerCase().trim();
-                matchesSearch = 
-                    (bookmark.title && bookmark.title.toLowerCase().includes(term)) ||
-                    (bookmark.description && bookmark.description.toLowerCase().includes(term)) ||
-                    (bookmark.tags && Array.isArray(bookmark.tags) && 
-                     bookmark.tags.some(tag => tag && tag.toLowerCase().includes(term)));
+                
+                // 检查标题匹配
+                const titleMatch = bookmark.title && bookmark.title.toLowerCase().includes(term);
+                
+                // 检查描述匹配
+                const descriptionMatch = bookmark.description && bookmark.description.toLowerCase().includes(term);
+                
+                // 检查标签匹配
+                let tagsMatch = false;
+                if (bookmark.tags && Array.isArray(bookmark.tags)) {
+                    tagsMatch = bookmark.tags.some(tag => tag && tag.toLowerCase().includes(term));
+                }
+                
+                matchesSearch = titleMatch || descriptionMatch || tagsMatch;
+                
+                console.log(`搜索 "${term}": 标题匹配=${titleMatch}, 描述匹配=${descriptionMatch}, 标签匹配=${tagsMatch}`);
             }
             
-            return matchesCategory && matchesSearch;
+            const result = matchesCategory && matchesSearch;
+            if (result && searchTerm) {
+                console.log(`书签 "${bookmark.title}" 匹配搜索条件`);
+            }
+            
+            return result;
         });
         
         console.log(`过滤结果: 从 ${bookmarks.length} 个书签中筛选出 ${filtered.length} 个`);
@@ -675,6 +691,11 @@ function setupSearchAndFilters() {
             if (window.bookmarkManager) {
                 window.bookmarkManager.searchTerm = searchTerm;
                 window.bookmarkManager.loadPublicBookmarks();
+                
+                // 显示搜索状态
+                if (searchTerm) {
+                    console.log(`正在搜索: "${searchTerm}"`);
+                }
             } else {
                 console.error('书签管理器未初始化');
             }
@@ -741,33 +762,36 @@ function setupSearchAndFilters() {
 document.addEventListener('DOMContentLoaded', function() {
     console.log('DOM加载完成，初始化书签管理器...');
     
-    // 立即设置搜索和筛选事件监听器
-    if (window.location.pathname.endsWith('index.html') || window.location.pathname === '/') {
-        console.log('在首页，立即设置搜索和筛选事件');
-        setupSearchAndFilters();
-    }
-    
-    // 等待Supabase初始化完成
-    const waitForSupabase = () => {
-        if (window.supabase) {
-            console.log('Supabase已初始化，开始加载数据');
-            
-            // 如果是首页，加载书签
-            if (window.location.pathname.endsWith('index.html') || window.location.pathname === '/') {
-                console.log('在首页，加载书签数据');
-                window.bookmarkManager.loadPublicBookmarks();
-            }
-            
-            // 如果是个人中心页面，加载用户内容
-            if (window.location.pathname.endsWith('profile.html')) {
-                console.log('在个人中心页面，加载用户内容');
-                window.bookmarkManager.loadUserContent();
-            }
-        } else {
-            console.log('等待Supabase初始化...');
-            setTimeout(waitForSupabase, 100);
+    // 等待页面完全加载后设置事件监听器
+    setTimeout(() => {
+        // 立即设置搜索和筛选事件监听器
+        if (window.location.pathname.endsWith('index.html') || window.location.pathname === '/') {
+            console.log('在首页，设置搜索和筛选事件');
+            setupSearchAndFilters();
         }
-    };
-    
-    waitForSupabase();
+        
+        // 等待Supabase初始化完成
+        const waitForSupabase = () => {
+            if (window.supabase) {
+                console.log('Supabase已初始化，开始加载数据');
+                
+                // 如果是首页，加载书签
+                if (window.location.pathname.endsWith('index.html') || window.location.pathname === '/') {
+                    console.log('在首页，加载书签数据');
+                    window.bookmarkManager.loadPublicBookmarks();
+                }
+                
+                // 如果是个人中心页面，加载用户内容
+                if (window.location.pathname.endsWith('profile.html')) {
+                    console.log('在个人中心页面，加载用户内容');
+                    window.bookmarkManager.loadUserContent();
+                }
+            } else {
+                console.log('等待Supabase初始化...');
+                setTimeout(waitForSupabase, 100);
+            }
+        };
+        
+        waitForSupabase();
+    }, 100);
 });
